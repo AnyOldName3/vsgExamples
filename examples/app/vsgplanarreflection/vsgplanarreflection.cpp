@@ -38,6 +38,58 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 // * culling planes to avoid wasting time telling the GPU about things only in the
 //   unneeded bits of the secondary viewpoint.
 // * general tidy-up.
+// * view masks to disable clip planes in non-rtt view.
+
+vsg::ref_ptr<vsg::Node> createTestScene(vsg::ref_ptr<vsg::Options> options, bool insertCullNode = true)
+{
+    auto builder = vsg::Builder::create();
+    builder->options = options;
+
+    auto scene = vsg::Group::create();
+
+    vsg::GeometryInfo geomInfo;
+    vsg::StateInfo stateInfo;
+
+    geomInfo.cullNode = insertCullNode;
+
+    // this is very carefully calibrated so nothing intersects the mirror plane as it
+    // spins and I totally didn't end up with that by accident.
+
+    geomInfo.position = geomInfo.dx * -3.0f;
+
+    geomInfo.color.set(1.0f, 1.0f, 0.5f, 1.0f);
+    scene->addChild(builder->createBox(geomInfo, stateInfo));
+
+    geomInfo.color.set(1.0f, 0.5f, 1.0f, 1.0f);
+    geomInfo.position += geomInfo.dx * 1.5f;
+    scene->addChild(builder->createSphere(geomInfo, stateInfo));
+
+    geomInfo.color.set(0.0f, 1.0f, 1.0f, 1.0f);
+    geomInfo.position += geomInfo.dx * 1.5f;
+    scene->addChild(builder->createCylinder(geomInfo, stateInfo));
+
+    geomInfo.color.set(0.5f, 1.0f, 0.5f, 1.0f);
+    geomInfo.position += geomInfo.dx * 1.5f;
+    scene->addChild(builder->createCapsule(geomInfo, stateInfo));
+
+    geomInfo.color.set(1.0f, 1.0f, 1.0f, 1.0f);
+    geomInfo.position += geomInfo.dx * 1.5f;
+    scene->addChild(builder->createBox(geomInfo, stateInfo));
+
+    geomInfo.color.set(0.5f, 1.0f, 1.0f, 1.0f);
+    geomInfo.position += geomInfo.dx * 1.5f;
+    scene->addChild(builder->createSphere(geomInfo, stateInfo));
+
+    geomInfo.color.set(1.0f, 0.0f, 1.0f, 1.0f);
+    geomInfo.position += geomInfo.dx * 1.5f;
+    scene->addChild(builder->createCylinder(geomInfo, stateInfo));
+
+    geomInfo.color.set(0.5f, 0.5f, 1.0f, 1.0f);
+    geomInfo.position += geomInfo.dx * 1.5f;
+    scene->addChild(builder->createCapsule(geomInfo, stateInfo));
+
+    return scene;
+}
 
 // RenderGraph for rendering to image
 
@@ -397,6 +449,8 @@ int main(int argc, char** argv)
     bool separateCommandGraph = arguments.read("-s");
     bool multiThreading = arguments.read("--mt");
 
+    bool insertCullNode = arguments.read("--cull");
+
     if (arguments.errors()) return arguments.writeErrorMessages(std::cerr);
 
     // read shaders
@@ -443,11 +497,9 @@ int main(int argc, char** argv)
     {
         vsg_scene = vsgNodes.front();
     }
-
-    if (!vsg_scene)
+    else
     {
-        std::cout << "No valid model files specified." << std::endl;
-        return 1;
+        vsg_scene = createTestScene(options, insertCullNode);
     }
 
     // A hack for getting the example teapot into the correct orientation
@@ -473,6 +525,25 @@ int main(int argc, char** argv)
 
     viewer->addWindow(window);
 
+    // Add explicit light so it's shared between views and has a consistent direction for both.
+    vsg::ref_ptr<vsg::Group> lightGroup = vsg::Group::create();
+
+    auto ambientLight = vsg::AmbientLight::create();
+    ambientLight->name = "ambient";
+    ambientLight->color.set(1.0f, 1.0f, 1.0f);
+    ambientLight->intensity = 0.05f;
+    lightGroup->addChild(ambientLight);
+
+    auto directionalLight = vsg::DirectionalLight::create();
+    directionalLight->name = "sunlight";
+    directionalLight->color.set(1.0f, 1.0f, 1.0f);
+    directionalLight->intensity = 0.95f;
+    directionalLight->direction.set(0.2f, 0.2f, -0.717157f);
+    lightGroup->addChild(directionalLight);
+
+    lightGroup->addChild(vsg_scene);
+    vsg_scene = lightGroup;
+
     auto context = vsg::Context::create(window->getOrCreateDevice());
 
     // Framebuffer with attachments
@@ -494,7 +565,8 @@ int main(int argc, char** argv)
 
     auto camera = createCameraForScene(vsg_scene, window->extent2D());
     offscreenCamera->projectionMatrix = camera->projectionMatrix;
-    auto main_RenderGraph = vsg::createRenderGraphForView(window, camera, vsg_scene);
+    auto main_RenderGraph = vsg::createRenderGraphForView(window, camera, vsg_scene, VK_SUBPASS_CONTENTS_INLINE, false);
+    // TODO: set masks on view, which is child of rendergraph
 
     // add close handler to respond to the close window button and pressing escape
     viewer->addEventHandler(vsg::CloseHandler::create(viewer));
