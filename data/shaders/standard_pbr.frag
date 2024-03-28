@@ -421,14 +421,8 @@ void main()
 
     if (numDirectionalLights>0)
     {
-        vec3 q1 = dFdx(eyePos);
-        vec3 q2 = dFdy(eyePos);
-        vec2 st1 = dFdx(texCoord0);
-        vec2 st2 = dFdy(texCoord0);
-
-        vec3 N = normalize(normalDir);
-        vec3 T = normalize(q1 * st2.t - q2 * st1.t);
-        vec3 B = -normalize(cross(N, T));
+        vec3 T = abs(normalDir.y) > 0 && abs(normalDir.z) > 0 ? normalize(vec3(0, normalDir.z, -normalDir.y)) : vec3(0, 1, 0);
+        vec3 B = -normalize(cross(normalDir, T));
 
         // directional lights
         for(int i = 0; i<numDirectionalLights; ++i)
