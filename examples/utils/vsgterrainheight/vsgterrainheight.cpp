@@ -49,9 +49,9 @@ public:
         if (intersector->intersections.empty()) return std::nullopt;
 
         // sort the intersections front to back
-        std::sort(intersector->intersections.begin(), intersector->intersections.end(), [](auto& lhs, auto& rhs) { return lhs->ratio < rhs->ratio; });
+        std::sort(intersector->intersections.begin(), intersector->intersections.end(), [](auto& lhs, auto& rhs) { return lhs.ratio < rhs.ratio; });
 
-        return intersector->intersections.front()->worldIntersection;
+        return intersector->intersections.front().worldIntersection;
     }
 };
 
@@ -199,7 +199,7 @@ int main(int argc, char** argv)
                 return queryLocations.size() / queryBins + (i < queryLocations.size() % queryBins ? 1 : 0);
             };
 
-            std::vector<std::vector<vsg::dvec3>> bins(queryBins, {});
+            std::vector<std::vector<vsg::dvec3>> bins(queryBins, std::vector<vsg::dvec3>{});
             for (size_t i = 0; i < bins.size(); ++i)
             {
                 bins[i].reserve(nthBinSize(i));
@@ -267,7 +267,7 @@ int main(int argc, char** argv)
                 return queryLocations.size() / queryBins + (i < queryLocations.size() % queryBins ? 1 : 0);
             };
 
-            std::vector<std::vector<vsg::dvec3>> bins(queryBins, {});
+            std::vector<std::vector<vsg::dvec3>> bins(queryBins, std::vector<vsg::dvec3>{});
             for (size_t i = 0; i < bins.size(); ++i)
             {
                 bins[i].reserve(nthBinSize(i));
