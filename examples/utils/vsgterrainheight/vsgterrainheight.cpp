@@ -124,6 +124,8 @@ int main(int argc, char** argv)
     options->add(vsgXchange::all::create());
 #endif
 
+    using clock = std::chrono::high_resolution_clock;
+
     auto scene = vsg::Group::create();
     vsg::ref_ptr<vsg::EllipsoidModel> ellipsoidModel;
 
@@ -401,6 +403,7 @@ int main(int argc, char** argv)
     viewer->compile();
 
     int iterations = 0;
+    auto totalDuration = std::chrono::nanoseconds::zero();
     // rendering main loop
     while (viewer->advanceToNextFrame())
     {
@@ -414,6 +417,8 @@ int main(int argc, char** argv)
         viewer->present();
 
         size_t hits = 0;
+
+        auto beforeIntersection = clock::now();
 
         if (!queryThreads)
         {
@@ -438,12 +443,19 @@ int main(int argc, char** argv)
                 hits += future.get();
             }
         }
-        std::cout << "Hits: " << hits << ", misses: " << queryLocationCount - hits << std::endl;
+
+        auto afterIntersection = clock::now();
+        auto duration = afterIntersection - beforeIntersection;
+        totalDuration += duration;
+
+        std::cout << "Hits: " << hits << ", misses: " << queryLocationCount - hits << " in " << std::chrono::duration<double>(duration).count() << "s" << std::endl;
 
         ++iterations;
         if (iterations == 10)
             viewer->close();
     }
+
+    std::cout << "All intersections took a total of " << std::chrono::duration<double>(totalDuration).count() << "s" << std::endl;
 
     // clean up done automatically thanks to ref_ptr<>
     return 0;
