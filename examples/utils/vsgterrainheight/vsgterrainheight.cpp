@@ -4,6 +4,7 @@
 #    include <vsgXchange/all.h>
 #endif
 
+#include <future>
 #include <iostream>
 #include <optional>
 #include <random>
@@ -55,6 +56,45 @@ public:
     }
 };
 
+class IntersectionOperation : public vsg::Inherit<vsg::Operation, IntersectionOperation>
+{
+public:
+    std::vector<vsg::dvec3>::const_iterator begin;
+    std::vector<vsg::dvec3>::const_iterator end;
+    vsg::dvec3 down;
+
+    std::map<std::thread::id, vsg::ref_ptr<IntersectionHandler>>* intersectionHandlers;
+
+    std::promise<size_t> hits;
+
+    IntersectionOperation(std::vector<vsg::dvec3>::const_iterator in_begin, std::vector<vsg::dvec3>::const_iterator in_end, vsg::dvec3 in_down, std::map<std::thread::id, vsg::ref_ptr<IntersectionHandler>>* in_intersectionHandlers) :
+        begin(in_begin),
+        end(in_end),
+        down(in_down),
+        intersectionHandlers(in_intersectionHandlers),
+        hits()
+    {
+    }
+
+    void reset()
+    {
+        hits = std::promise<size_t>();
+    }
+
+    void run() override
+    {
+        vsg::ref_ptr<IntersectionHandler> intersectionHandler = intersectionHandlers->at(std::this_thread::get_id());
+        size_t hitCount = 0;
+        for (auto itr = begin; itr != end; ++itr)
+        {
+            const auto& location = *itr;
+            if (intersectionHandler->intersection_LineSegmentIntersector(location, location + down).has_value())
+                ++hitCount;
+        }
+        hits.set_value(hitCount);
+    }
+};
+
 int main(int argc, char** argv)
 {
     // set up defaults and read command line arguments to override them
@@ -73,6 +113,9 @@ int main(int argc, char** argv)
 
     auto querySort = arguments.read("--qs");
     auto queryBins = arguments.value(1, "--qb");
+
+    auto queryThreads = arguments.value(0, "-t");
+    auto queryOperations = arguments.value(queryThreads, "-o");
 
     if (arguments.errors()) return arguments.writeErrorMessages(std::cerr);
 
@@ -314,6 +357,26 @@ int main(int argc, char** argv)
         }
     }
 
+    vsg::ref_ptr<vsg::OperationThreads> operationThreads;
+    std::map<std::thread::id, vsg::ref_ptr<IntersectionHandler>> intersectionHandlers;
+    std::vector<vsg::ref_ptr<IntersectionOperation>> intersectionOperations;
+    if (queryThreads)
+    {
+        operationThreads = vsg::OperationThreads::create(queryThreads - 1);
+        // intersection handlers own a line segment intersector, which is stateful, so can only be used by one thread at a time
+        intersectionHandlers[std::this_thread::get_id()] = intersectionHandler;
+        for (const auto& thread : operationThreads->threads)
+        {
+            intersectionHandlers[thread.get_id()] = IntersectionHandler::create(scene, ellipsoidModel);
+        }
+        for (size_t i = 0; i < queryOperations; ++i)
+        {
+            auto begin = queryLocations.begin() + (queryLocations.size() * i) / queryOperations;
+            auto end = queryLocations.begin() + (queryLocations.size() * (i + 1)) / queryOperations;
+            intersectionOperations.emplace_back(IntersectionOperation::create(begin, end, down, &intersectionHandlers));
+        }
+    }
+
     double nearFarRatio = 0.001;
     vsg::ref_ptr<vsg::ProjectionMatrix> perspective;
     if (ellipsoidModel)
@@ -352,10 +415,28 @@ int main(int argc, char** argv)
 
         size_t hits = 0;
 
-        for (const auto& location : queryLocations)
+        if (!queryThreads)
         {
-            if (intersectionHandler->intersection_LineSegmentIntersector(location, location + down).has_value())
-                ++hits;
+            for (const auto& location : queryLocations)
+            {
+                if (intersectionHandler->intersection_LineSegmentIntersector(location, location + down).has_value())
+                    ++hits;
+            }
+        }
+        else
+        {
+            for (auto& intersectionOperation : intersectionOperations)
+            {
+                intersectionOperation->reset();
+                operationThreads->add(intersectionOperation);
+            }
+            operationThreads->run();
+            for (auto& intersectionOperation : intersectionOperations)
+            {
+                auto future = intersectionOperation->hits.get_future();
+                future.wait();
+                hits += future.get();
+            }
         }
         std::cout << "Hits: " << hits << ", misses: " << queryLocationCount - hits << std::endl;
 
