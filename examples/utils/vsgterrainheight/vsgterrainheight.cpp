@@ -146,7 +146,7 @@ int main(int argc, char** argv)
     auto intersectionOptimizeVisitor = vsg::IntersectionOptimizeVisitor::create();
     for (auto& readerWriter : options->readerWriters)
     {
-        readerWriter = vsg::ApplyVisitorReader::create(readerWriter, intersectionOptimizeVisitor);
+        readerWriter = vsg::ApplyReplacementVisitorReader::create(readerWriter, intersectionOptimizeVisitor);
     }
 
     if (argc > 1)
