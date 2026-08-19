@@ -95,6 +95,20 @@ public:
     }
 };
 
+struct GetEllipsoidModel : public vsg::Visitor
+{
+    vsg::ref_ptr<vsg::EllipsoidModel> ellipsoidModel = nullptr;
+
+    void apply(vsg::Node& node) override
+    {
+        if (!ellipsoidModel)
+        {
+            ellipsoidModel = node.getRefObject<vsg::EllipsoidModel>("EllipsoidModel");
+            node.traverse(*this);
+        }
+    }
+};
+
 int main(int argc, char** argv)
 {
     // set up defaults and read command line arguments to override them
@@ -142,7 +156,9 @@ int main(int argc, char** argv)
         if (model)
         {
             scene->addChild(model);
-            ellipsoidModel = model->getRefObject<vsg::EllipsoidModel>("EllipsoidModel");
+            GetEllipsoidModel gem;
+            model->accept(gem);
+            ellipsoidModel = gem.ellipsoidModel;
         }
     }
 
