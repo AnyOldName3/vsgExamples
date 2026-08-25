@@ -187,7 +187,7 @@ namespace
                 clearPreSelection();
                 return;
             }
-            std::sort(intersections.begin(), intersections.end(), [](auto& lhs, auto& rhs) { return lhs->ratio < rhs->ratio; });
+            std::sort(intersections.begin(), intersections.end(), [](auto& lhs, auto& rhs) { return lhs.ratio < rhs.ratio; });
 
             auto isSelected = [&](const vsg::Node* nodeIn) -> bool //return true if node is in selection vector
             {
@@ -197,7 +197,7 @@ namespace
             };
             for (const auto& i : intersections)
             {
-                const auto& np = i->nodePath;
+                const auto& np = i.nodePath;
                 const auto* node = np.at(np.size() - 2);
                 if (node == preSelection) return;
                 if (isSelected(node)) continue;
