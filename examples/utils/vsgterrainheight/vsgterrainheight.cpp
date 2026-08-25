@@ -251,7 +251,7 @@ int main(int argc, char** argv)
 
         if (querySort)
         {
-            std::sort(queryLocations.begin(), queryLocations.end(), [&](const vsg::dvec3& l, const vsg::dvec3& r) { return ellipsoidModel->convertECEFToLatLongAltitude(l).x < ellipsoidModel->convertECEFToLatLongAltitude(r).x; });
+            std::sort(queryLocations.begin(), queryLocations.end(), [&](const vsg::dvec3& l, const vsg::dvec3& r) { return (ecefToGeodetic * l).x < (ecefToGeodetic * r).x; });
         }
 
         if (queryBins != 1)
@@ -270,7 +270,7 @@ int main(int argc, char** argv)
             longs.reserve(queryLocations.size());
             for (const auto& loc : queryLocations)
             {
-                longs.push_back(ellipsoidModel->convertECEFToLatLongAltitude(loc).y);
+                longs.push_back((ecefToGeodetic * loc).y);
             }
 
             std::vector<double> thresholds;
@@ -289,7 +289,7 @@ int main(int argc, char** argv)
 
             for (const auto& query : queryLocations)
             {
-                auto lla = ellipsoidModel->convertECEFToLatLongAltitude(query);
+                auto lla = (ecefToGeodetic * query);
                 for (size_t i = 0; i < bins.size(); ++i)
                 {
                     if (lla.y < thresholds[i])
