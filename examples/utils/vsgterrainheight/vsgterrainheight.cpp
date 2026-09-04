@@ -221,10 +221,10 @@ int main(int argc, char** argv)
     vsg::ref_ptr<vsg::EllipsoidModel> ellipsoidModel;
 
     auto intersectionOptimizeVisitor = vsg::IntersectionOptimizeVisitor::create();
-    for (auto& readerWriter : options->readerWriters)
-    {
-        readerWriter = ApplyReplacementVisitorReader::create(readerWriter, intersectionOptimizeVisitor);
-    }
+    auto compositeReaderWriter = vsg::CompositeReaderWriter::create();
+    compositeReaderWriter->readerWriters = options->readerWriters;
+    options->readerWriters.clear();
+    options->readerWriters.emplace_back(ApplyReplacementVisitorReader::create(compositeReaderWriter, intersectionOptimizeVisitor));
 
     if (argc > 1)
     {
