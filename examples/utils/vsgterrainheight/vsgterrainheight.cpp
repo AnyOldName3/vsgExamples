@@ -317,7 +317,7 @@ int main(int argc, char** argv)
 
         auto geodeticToEcef = ellipsoidModel->computeLocalToWorldTransform(originLLA);
 
-        for (size_t i = 0; i < queryLocationCount; ++i)
+        for (int i = 0; i < queryLocationCount; ++i)
         {
             vsg::dvec3 localPoint{
                 localBounds.bounds.min.x + randomDist(randomEngine) * (localBounds.bounds.max.x - localBounds.bounds.min.x),
@@ -386,7 +386,7 @@ int main(int argc, char** argv)
     }
     else
     {
-        for (size_t i = 0; i < queryLocationCount; ++i)
+        for (int i = 0; i < queryLocationCount; ++i)
         {
             queryLocations.emplace_back(
                 computeBounds.bounds.min.x + randomDist(randomEngine) * (computeBounds.bounds.max.x - computeBounds.bounds.min.x),
@@ -464,7 +464,7 @@ int main(int argc, char** argv)
         {
             intersectionHandlers[thread.get_id()] = IntersectionHandler::create(scene, ellipsoidModel);
         }
-        for (size_t i = 0; i < queryOperations; ++i)
+        for (int i = 0; i < queryOperations; ++i)
         {
             auto begin = queryLocations.begin() + (queryLocations.size() * i) / queryOperations;
             auto end = queryLocations.begin() + (queryLocations.size() * (i + 1)) / queryOperations;
