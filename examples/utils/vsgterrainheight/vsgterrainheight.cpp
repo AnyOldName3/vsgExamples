@@ -109,6 +109,83 @@ struct GetEllipsoidModel : public vsg::Visitor
     }
 };
 
+/// Class to wrap a ReaderWriter and apply a ReplacementVisitor to everything it loads
+class ApplyReplacementVisitorReader : public vsg::Inherit<vsg::ReaderWriter, ApplyReplacementVisitorReader>
+{
+public:
+    ApplyReplacementVisitorReader(vsg::ref_ptr<ReaderWriter> in_child, vsg::ref_ptr<vsg::ReplacementVisitor> in_visitor) :
+        child(in_child),
+        visitor(in_visitor)
+    {
+    }
+
+    ApplyReplacementVisitorReader(const ApplyReplacementVisitorReader& rhs, const vsg::CopyOp& copyop = {}) :
+        Inherit(rhs),
+        child(copyop(rhs.child)),
+        visitor(copyop(rhs.visitor))
+    {
+    }
+
+    vsg::ref_ptr<ReaderWriter> child;
+    vsg::ref_ptr<vsg::ReplacementVisitor> visitor;
+
+    vsg::ref_ptr<vsg::Object> read(const vsg::Path& filename, vsg::ref_ptr<const vsg::Options> options) const override
+    {
+        auto object = child->read(filename, options);
+        if (object)
+        {
+            std::scoped_lock<std::mutex> lock(_visitorMutex);
+            visitor->tryReplacePointer(object);
+        }
+        return object;
+    }
+
+    vsg::ref_ptr<vsg::Object> read(std::istream& fin, vsg::ref_ptr<const vsg::Options> options) const override
+    {
+        auto object = child->read(fin, options);
+        if (object)
+        {
+            std::scoped_lock<std::mutex> lock(_visitorMutex);
+            visitor->tryReplacePointer(object);
+        }
+        return object;
+    }
+
+    vsg::ref_ptr<vsg::Object> read(const uint8_t* ptr, size_t size, vsg::ref_ptr<const vsg::Options> options) const override
+    {
+        auto object = child->read(ptr, size, options);
+        if (object)
+        {
+            std::scoped_lock<std::mutex> lock(_visitorMutex);
+            visitor->tryReplacePointer(object);
+        }
+        return object;
+    }
+
+    bool write(const vsg::Object* object, const vsg::Path& filename, vsg::ref_ptr<const vsg::Options> options) const override
+    {
+        return child->write(object, filename, options);
+    }
+
+    bool write(const vsg::Object* object, std::ostream& fout, vsg::ref_ptr<const vsg::Options> options) const override
+    {
+        return child->write(object, fout, options);
+    }
+
+    bool readOptions(vsg::Options& options, vsg::CommandLine& arguments) const override
+    {
+        return child->readOptions(options, arguments);
+    }
+
+    bool getFeatures(Features& features) const override
+    {
+        return child->getFeatures(features);
+    }
+
+protected:
+    mutable std::mutex _visitorMutex;
+};
+
 int main(int argc, char** argv)
 {
     // set up defaults and read command line arguments to override them
@@ -146,7 +223,7 @@ int main(int argc, char** argv)
     auto intersectionOptimizeVisitor = vsg::IntersectionOptimizeVisitor::create();
     for (auto& readerWriter : options->readerWriters)
     {
-        readerWriter = vsg::ApplyReplacementVisitorReader::create(readerWriter, intersectionOptimizeVisitor);
+        readerWriter = ApplyReplacementVisitorReader::create(readerWriter, intersectionOptimizeVisitor);
     }
 
     if (argc > 1)
