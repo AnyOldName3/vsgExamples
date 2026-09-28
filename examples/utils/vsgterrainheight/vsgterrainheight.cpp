@@ -513,6 +513,42 @@ int main(int argc, char** argv)
 
     viewer->compile();
 
+    // preload loop
+    while (viewer->advanceToNextFrame())
+    {
+        // pass any events into EventHandlers assigned to the Viewer
+        viewer->handleEvents();
+
+        viewer->update();
+
+        viewer->recordAndSubmit();
+
+        viewer->present();
+
+        struct PagedLodChecker : public vsg::ConstVisitor
+        {
+            bool gotEmAll = true;
+
+            void apply(const vsg::Object& object) override
+            {
+                if (gotEmAll)
+                    object.traverse(*this);
+            }
+
+            void apply(const vsg::PagedLOD& lod) override
+            {
+                if (lod.requestStatus != vsg::PagedLOD::NoRequest)
+                    gotEmAll = false;
+                lod.traverse(*this);
+            }
+        };
+
+        PagedLodChecker plc;
+        scene->accept(plc);
+        if (plc.gotEmAll)
+            break;
+    }
+
     int iterations = 0;
     auto totalDuration = std::chrono::nanoseconds::zero();
     // rendering main loop
