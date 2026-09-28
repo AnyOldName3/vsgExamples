@@ -16,11 +16,13 @@ public:
     vsg::ref_ptr<vsg::EllipsoidModel> ellipsoidModel;
     bool verbose = false;
     vsg::ref_ptr<vsg::LineSegmentIntersector> intersector;
+    vsg::LineSegmentIntersector::FeatureMask featureMask;
 
-    IntersectionHandler(vsg::ref_ptr<vsg::Group> in_scenegraph, vsg::ref_ptr<vsg::EllipsoidModel> in_ellipsoidModel) :
+    IntersectionHandler(vsg::ref_ptr<vsg::Group> in_scenegraph, vsg::ref_ptr<vsg::EllipsoidModel> in_ellipsoidModel, vsg::LineSegmentIntersector::FeatureMask in_featureMask) :
         scenegraph(in_scenegraph),
         ellipsoidModel(in_ellipsoidModel),
-        intersector(nullptr)
+        intersector(nullptr),
+        featureMask(in_featureMask)
     {
     }
 
@@ -29,6 +31,7 @@ public:
         if (!intersector)
         {
             intersector = vsg::LineSegmentIntersector::create(start, end);
+            intersector->featureMask = featureMask;
         }
         else
         {
@@ -208,6 +211,21 @@ int main(int argc, char** argv)
     auto queryThreads = arguments.value(0, "-t");
     auto queryOperations = arguments.value(queryThreads, "-o");
 
+    auto skipWorld = arguments.read("--sw");
+    auto skipNodePath = arguments.read("--snp");
+    auto skipArrays = arguments.read("--sa");
+    auto skipIndexRatios = arguments.read("--sir");
+
+    vsg::LineSegmentIntersector::FeatureMask featureMask = vsg::LineSegmentIntersector::FeatureMask::NONE;
+    if (!skipWorld)
+        featureMask = static_cast<vsg::LineSegmentIntersector::FeatureMask>(featureMask | vsg::LineSegmentIntersector::FeatureMask::WORLD);
+    if (!skipNodePath)
+        featureMask = static_cast<vsg::LineSegmentIntersector::FeatureMask>(featureMask | vsg::LineSegmentIntersector::FeatureMask::NODE_PATH);
+    if (!skipArrays)
+        featureMask = static_cast<vsg::LineSegmentIntersector::FeatureMask>(featureMask | vsg::LineSegmentIntersector::FeatureMask::ARRAYS);
+    if (!skipIndexRatios)
+        featureMask = static_cast<vsg::LineSegmentIntersector::FeatureMask>(featureMask | vsg::LineSegmentIntersector::FeatureMask::INDEX_RATIOS);
+
     if (arguments.errors()) return arguments.writeErrorMessages(std::cerr);
 
 #ifdef vsgXchange_all
@@ -295,7 +313,7 @@ int main(int argc, char** argv)
         lookAt = vsg::LookAt::create(eye, centre, vsg::dvec3(0.0, 0.0, 1.0));
     }
 
-    auto intersectionHandler = IntersectionHandler::create(scene, ellipsoidModel);
+    auto intersectionHandler = IntersectionHandler::create(scene, ellipsoidModel, featureMask);
 
     // default-construct to get the default seed and therefore deterministic values;
     std::mt19937 randomEngine;
@@ -462,7 +480,7 @@ int main(int argc, char** argv)
         intersectionHandlers[std::this_thread::get_id()] = intersectionHandler;
         for (const auto& thread : operationThreads->threads)
         {
-            intersectionHandlers[thread.get_id()] = IntersectionHandler::create(scene, ellipsoidModel);
+            intersectionHandlers[thread.get_id()] = IntersectionHandler::create(scene, ellipsoidModel, featureMask);
         }
         for (int i = 0; i < queryOperations; ++i)
         {
