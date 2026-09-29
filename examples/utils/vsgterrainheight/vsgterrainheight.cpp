@@ -13,14 +13,16 @@ class IntersectionHandler : public vsg::Inherit<vsg::Object, IntersectionHandler
 {
 public:
     vsg::ref_ptr<vsg::Group> scenegraph;
-    vsg::ref_ptr<vsg::EllipsoidModel> ellipsoidModel;
+    double baseAltitude;
+    double altitudeScale;
     bool verbose = false;
     vsg::ref_ptr<vsg::LineSegmentIntersector> intersector;
     vsg::LineSegmentIntersector::FeatureMask featureMask;
 
-    IntersectionHandler(vsg::ref_ptr<vsg::Group> in_scenegraph, vsg::ref_ptr<vsg::EllipsoidModel> in_ellipsoidModel, vsg::LineSegmentIntersector::FeatureMask in_featureMask) :
+    IntersectionHandler(vsg::ref_ptr<vsg::Group> in_scenegraph, double in_baseAltitude, double in_altitudeScale, vsg::LineSegmentIntersector::FeatureMask in_featureMask) :
         scenegraph(in_scenegraph),
-        ellipsoidModel(in_ellipsoidModel),
+        baseAltitude(in_baseAltitude),
+        altitudeScale(in_altitudeScale),
         intersector(nullptr),
         featureMask(in_featureMask)
     {
@@ -54,6 +56,12 @@ public:
 
         // sort the intersections front to back
         std::sort(intersector->intersections.begin(), intersector->intersections.end(), [](auto& lhs, auto& rhs) { return lhs.ratio < rhs.ratio; });
+
+        double altitude = baseAltitude - intersector->intersections.front().ratio * altitudeScale;
+        if (verbose)
+        {
+            std::cout << "Calculated altitude " << altitude << std::endl;
+        }
 
         return intersector->intersections.front().worldIntersection;
     }
@@ -313,7 +321,10 @@ int main(int argc, char** argv)
         lookAt = vsg::LookAt::create(eye, centre, vsg::dvec3(0.0, 0.0, 1.0));
     }
 
-    auto intersectionHandler = IntersectionHandler::create(scene, ellipsoidModel, featureMask);
+    auto intersectionHandler = IntersectionHandler::create(scene, 0.0, 0.0, featureMask);
+
+    double baseAltitude = computeBounds.bounds.max.z;
+    double altitudeScale = 1.0;
 
     // default-construct to get the default seed and therefore deterministic values;
     std::mt19937 randomEngine;
@@ -334,6 +345,10 @@ int main(int argc, char** argv)
         down = normalize(origin) * (localBounds.bounds.min.z - localBounds.bounds.max.z);
 
         auto geodeticToEcef = ellipsoidModel->computeLocalToWorldTransform(originLLA);
+
+        vsg::dvec3 basePoint(0.0, 0.0, localBounds.bounds.max.z);
+        auto baseEcef = geodeticToEcef * basePoint;
+        baseAltitude = ellipsoidModel->convertECEFToLatLongAltitude(baseEcef).z;
 
         for (int i = 0; i < queryLocationCount; ++i)
         {
@@ -470,6 +485,10 @@ int main(int argc, char** argv)
         }
     }
 
+    altitudeScale = vsg::length(down);
+    intersectionHandler->baseAltitude = baseAltitude;
+    intersectionHandler->altitudeScale = altitudeScale;
+
     vsg::ref_ptr<vsg::OperationThreads> operationThreads;
     std::map<std::thread::id, vsg::ref_ptr<IntersectionHandler>> intersectionHandlers;
     std::vector<vsg::ref_ptr<IntersectionOperation>> intersectionOperations;
@@ -480,7 +499,7 @@ int main(int argc, char** argv)
         intersectionHandlers[std::this_thread::get_id()] = intersectionHandler;
         for (const auto& thread : operationThreads->threads)
         {
-            intersectionHandlers[thread.get_id()] = IntersectionHandler::create(scene, ellipsoidModel, featureMask);
+            intersectionHandlers[thread.get_id()] = IntersectionHandler::create(scene, baseAltitude, altitudeScale, featureMask);
         }
         for (int i = 0; i < queryOperations; ++i)
         {
