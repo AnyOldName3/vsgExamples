@@ -223,6 +223,7 @@ int main(int argc, char** argv)
     auto skipNodePath = arguments.read("--snp");
     auto skipArrays = arguments.read("--sa");
     auto skipIndexRatios = arguments.read("--sir");
+    auto skipIntersectionsAfterFirst = arguments.read("--siaf");
 
     vsg::LineSegmentIntersector::FeatureMask featureMask = vsg::LineSegmentIntersector::FeatureMask::NONE;
     if (!skipWorld)
@@ -233,6 +234,10 @@ int main(int argc, char** argv)
         featureMask = static_cast<vsg::LineSegmentIntersector::FeatureMask>(featureMask | vsg::LineSegmentIntersector::FeatureMask::ARRAYS);
     if (!skipIndexRatios)
         featureMask = static_cast<vsg::LineSegmentIntersector::FeatureMask>(featureMask | vsg::LineSegmentIntersector::FeatureMask::INDEX_RATIOS);
+    if (!skipIntersectionsAfterFirst)
+        featureMask = static_cast<vsg::LineSegmentIntersector::FeatureMask>(featureMask | vsg::LineSegmentIntersector::FeatureMask::INTERSECTIONS_AFTER_FIRST);
+
+    auto minLeafSize = arguments.value(4, "--mls");
 
     if (arguments.errors()) return arguments.writeErrorMessages(std::cerr);
 
@@ -247,6 +252,7 @@ int main(int argc, char** argv)
     vsg::ref_ptr<vsg::EllipsoidModel> ellipsoidModel;
 
     auto intersectionOptimizeVisitor = vsg::IntersectionOptimizeVisitor::create();
+    intersectionOptimizeVisitor->minLeafSize = minLeafSize;
     auto compositeReaderWriter = vsg::CompositeReaderWriter::create();
     compositeReaderWriter->readerWriters = options->readerWriters;
     options->readerWriters.clear();
